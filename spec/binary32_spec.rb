@@ -1,42 +1,45 @@
 require 'binary32'
 
 def get_binary(num)
-  "%032b" % [num].pack('e').reverse.each_char.inject(0) { |sum,c| sum = (sum << 8) + c.ord }
+  [num].pack('g').bytes.map{|n| "%08b" % n}.join
+  #=> [123.456]
+  #=> #pack "four character 32 bit"
+  #=> #bytes "an array of the ordinal of the char"
+  #=> #map "08b" % a ordinal
+  #=> joining array of string together
 end
 
-describe Binary32 do
+def compare_binary(result, expected)
+  (result.to_i(2) - expected.to_i(2)).abs.should <= 1
+end
 
-  it 'returns 32 bit binary for 0.0' do
-    binary = get_binary(0.0)
-    described_class.should_receive(:sign).and_return(binary[0])
-    described_class.should_receive(:exponent).and_return(binary[1..8])
-    described_class.should_receive(:mantissa).and_return(binary[9..31])
-    described_class.convert(0.0).should == binary
-  end
-
-  describe "#mantissa" do
+describe Binary32Converter do
+  describe "convert floating number to a 32 bit binary" do
     {
-      12.345 => get_binary(12.345),
+      0.0 => get_binary(0.0),
+      123.456 => get_binary(123.456),
+      Math::PI => get_binary(Math::PI),
       1.9999999 => get_binary(1.9999999),
-      -2.5521175E38 => get_binary(-2.5521175E38),
-      Math::PI => get_binary(Math::PI)
+      -2.231424E22 => get_binary(-2.231424E22)
     }.each do |num, binary|
-      it "returns mantissa for #{num}" do
-        described_class.should_receive(:sign).and_return(binary[0])
-        described_class.should_receive(:exponent).and_return(binary[1..8])
-        (described_class.convert(num).to_i - binary.to_i).abs.should <= 1
+      converter = described_class.new(num)
+
+      it "returns the first bit (sign) for #{num}" do
+        converter.sign.should == binary[0]
       end
 
-      it "returns exponent for #{num}" do
-        described_class.should_receive(:sign).and_return(binary[0])
-        described_class.should_receive(:mantissa).and_return(binary[9..31])
-        described_class.convert(num).should == binary
+      it "returns 8 bits (exponent) after sign for #{num}" do
+        converter.exponent.should == binary[1..8]
       end
 
-      it "returns sign for #{num}" do
-        described_class.should_receive(:exponent).and_return(binary[1..8])
-        described_class.should_receive(:mantissa).and_return(binary[9..31])
-        described_class.convert(num).should == binary
+      it "returns 23 bits (mantissa) after sign and exponent for #{num}" do
+        result = converter.mantissa
+        compare_binary(result, binary[9..31])
+      end
+
+      it "returns the 32 bit binary for #{num}" do
+        result = converter.binary
+        compare_binary(result, binary)
       end
     end
   end
